@@ -64,7 +64,8 @@ export async function POST(request: Request) {
         "they'll get an answer shortly. Do not invent any facts.",
       prompt: question,
     });
-    return textResponse(result.textStream, { escalated: true, source: null });
+    // If the gateway is rate-limited/unavailable, fall back to the canned line.
+    return textResponse(result.textStream, { escalated: true, source: null, fallback: ESCALATION_MESSAGE });
   }
 
   // ── Confident → answer from retrieved context with a citation.
@@ -91,7 +92,10 @@ export async function POST(request: Request) {
     prompt: question,
   });
 
-  return textResponse(result.textStream, { escalated: false, source: sourceLabel });
+  // If the gateway is rate-limited/unavailable, serve the retrieved chunk verbatim
+  // so the concierge still answers (upgrades to LLM phrasing once credits exist).
+  const fallbackAnswer = `${chunks[0]?.content ?? ''}\n\nBased on: ${sourceLabel}`;
+  return textResponse(result.textStream, { escalated: false, source: sourceLabel, fallback: fallbackAnswer });
 }
 
 // ─────────────────────────────────────────── helpers
@@ -103,10 +107,10 @@ function citationLabel(source: string | null): string {
 }
 
 function textResponse(
-  stream: ReadableStream<Uint8Array> | ReadableStream<string> | AsyncIterable<string>,
-  meta: { escalated: boolean; source: string | null },
+  stream: AsyncIterable<string | Uint8Array>,
+  meta: { escalated: boolean; source: string | null; fallback?: string },
 ): Response {
-  const body = toByteStream(stream);
+  const body = toByteStream(stream, meta.fallback);
   const headers: Record<string, string> = {
     'Content-Type': 'text/plain; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -116,40 +120,43 @@ function textResponse(
   return new Response(body, { headers });
 }
 
-/** Normalize a string async-iterable (AI SDK textStream) or stream into bytes. */
+/**
+ * Drain a text/byte async-iterable (AI SDK `textStream` is both a ReadableStream
+ * AND async-iterable) into a byte stream. If the source produces nothing — a thrown
+ * error OR a silently-empty stream (e.g. AI Gateway rate limit) — emit `fallback`
+ * so the concierge still returns a usable answer.
+ */
 function toByteStream(
-  src: ReadableStream<Uint8Array> | ReadableStream<string> | AsyncIterable<string>,
+  src: AsyncIterable<string | Uint8Array>,
+  fallback?: string,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
-  // If it's already a byte ReadableStream, pass through.
-  if (src instanceof ReadableStream) {
-    return src as ReadableStream<Uint8Array>;
-  }
-  const iterable = src as AsyncIterable<string>;
   return new ReadableStream<Uint8Array>({
     async start(controller) {
+      let emitted = 0;
       try {
-        for await (const part of iterable) {
-          controller.enqueue(encoder.encode(part));
+        for await (const part of src) {
+          if (part == null) continue;
+          const bytes = typeof part === 'string' ? encoder.encode(part) : part;
+          if (bytes.length) {
+            controller.enqueue(bytes);
+            emitted += bytes.length;
+          }
         }
       } catch (err) {
-        controller.error(err);
-        return;
+        console.error('[concierge] answer stream failed:', err instanceof Error ? err.message : err);
+      }
+      if (emitted === 0 && fallback) {
+        controller.enqueue(encoder.encode(fallback));
       }
       controller.close();
     },
   });
 }
 
-/** A one-shot text stream for canned/offline answers. */
-function staticStream(text: string): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(encoder.encode(text));
-      controller.close();
-    },
-  });
+/** A one-shot text source for canned/offline answers. */
+async function* staticStream(text: string): AsyncIterable<string> {
+  yield text;
 }
 
 function jsonError(error: string, status: number): Response {

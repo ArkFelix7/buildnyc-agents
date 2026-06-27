@@ -17,11 +17,17 @@ export const env = {
   supabaseAnonKey: str(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
   supabaseServiceKey: str(process.env.SUPABASE_SERVICE_ROLE_KEY),
 
-  // AI Gateway (Vercel)
+  // AI Gateway (Vercel) — used for embeddings, and chat fallback when no Anthropic key
   aiGatewayKey: str(process.env.AI_GATEWAY_API_KEY),
   modelFast: str(process.env.MODEL_FAST) ?? 'anthropic/claude-haiku-4.5',
   modelSmart: str(process.env.MODEL_SMART) ?? 'anthropic/claude-sonnet-4.5',
   modelEmbed: str(process.env.MODEL_EMBED) ?? 'openai/text-embedding-3-small',
+
+  // Anthropic API (direct) — preferred for chat when present (unlocks sonnet).
+  // Bare Anthropic model ids (dashes, no date suffix).
+  anthropicKey: str(process.env.ANTHROPIC_API_KEY),
+  anthropicModelFast: str(process.env.ANTHROPIC_MODEL_FAST) ?? 'claude-haiku-4-5',
+  anthropicModelSmart: str(process.env.ANTHROPIC_MODEL_SMART) ?? 'claude-sonnet-4-6',
 
   // Resend
   resendKey: str(process.env.RESEND_API_KEY),
@@ -41,6 +47,7 @@ export const flags = {
   hasSupabase: Boolean(env.supabaseUrl && env.supabaseServiceKey),
   hasSupabasePublic: Boolean(env.supabaseUrl && env.supabaseAnonKey),
   hasAIGateway: Boolean(env.aiGatewayKey),
+  hasAnthropic: Boolean(env.anthropicKey),
   hasResend: Boolean(env.resendKey),
   hasAuth0: Boolean(env.auth0Domain && env.auth0ClientId && env.auth0Secret),
 } as const;

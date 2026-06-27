@@ -3,11 +3,17 @@ import { flags } from '@/lib/env';
 import { auth0 } from '@/lib/auth0';
 
 /**
- * Auto-mounts the Auth0 `/auth/*` routes. In MOCK mode (Auth0 unconfigured) the
- * middleware passes through so the app runs end-to-end with zero env keys.
+ * Auth0 proxy layer (Next.js 16 renamed `middleware` to `proxy`).
+ * Auto-mounts the `/auth/*` routes: /auth/login, /auth/logout, /auth/callback,
+ * /auth/profile, /auth/access-token, /auth/backchannel-logout.
+ *
+ * In MOCK mode (Auth0 unconfigured) it passes through so the app runs
+ * end-to-end with zero env keys.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   if (!flags.hasAuth0) return NextResponse.next();
+
+  // Always return the auth response (it forwards to your app routes by default).
   return auth0.middleware(request);
 }
 

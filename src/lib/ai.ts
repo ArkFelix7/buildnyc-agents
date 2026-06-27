@@ -1,6 +1,11 @@
 import { gateway } from '@ai-sdk/gateway';
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { embed, embedMany } from 'ai';
 import { env, flags, EMBED_DIM } from './env';
+
+// Direct Anthropic provider (preferred for chat when a key is present — unlocks
+// sonnet, which the Vercel free-tier gateway does not serve). Constructed lazily.
+const anthropic = flags.hasAnthropic ? createAnthropic({ apiKey: env.anthropicKey }) : null;
 
 /**
  * Centralized model + embedding helpers routed through the Vercel AI Gateway.
@@ -14,6 +19,10 @@ import { env, flags, EMBED_DIM } from './env';
  */
 
 export function chatModel(which: 'fast' | 'smart' = 'fast') {
+  // Prefer the direct Anthropic API (serves sonnet); fall back to the gateway.
+  if (anthropic) {
+    return anthropic(which === 'smart' ? env.anthropicModelSmart : env.anthropicModelFast);
+  }
   return gateway(which === 'smart' ? env.modelSmart : env.modelFast);
 }
 
