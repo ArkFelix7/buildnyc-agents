@@ -1,0 +1,27 @@
+{
+  "source": "buildnyc26-notion",
+  "chunks": [
+    "Built in NYC is a one-day hackathon on June 27, 2026. The build window runs from 12:05 PM to 4:00 PM EST. Submissions close at exactly 4:00 PM EST — late submissions are not accepted.",
+    "Submissions are made at community.vercel.com/hackathons/built-in-nyc. The submission password is shipnyc. You must enter it correctly for your submission to count.",
+    "Each submission requires: a public GitHub repo with a clear README, a 1 minute 30 second demo video (YouTube unlisted or Loom), all team member names, the tech stack used, and a live deployed Vercel URL.",
+    "Prizes: 1st place wins $5,000 in cash plus Vercel Pro credits for the whole team. 2nd place wins $2,500. 3rd place wins $1,000. There are also sponsor bonus prizes for best use of each sponsor technology.",
+    "Sponsor bonus prizes are awarded for the best load-bearing use of Anthropic Claude, Vercel AI Gateway, Supabase, Auth0, Resend, and Sentry. Cosmetic usage does not qualify — the tech must be central to the project.",
+    "Lunch is served at 1:00 PM in the main hall. It is catered and free for all attendees. Vegetarian, vegan, and gluten-free options are available. Coffee and snacks are available all day at the back of the room.",
+    "WiFi network: BuildNYC-Guest. Password: vercel2026. If the WiFi is slow, there is a 5 GHz network called BuildNYC-5G with the same password.",
+    "Judging happens from 4:15 PM to 5:00 PM. Each team gets a strict 3-minute live demo followed by 2 minutes of Q&A from the judges. Demos run over a projector at 1080p — test your screen resolution beforehand.",
+    "Judging criteria: technical execution (30%), creativity and originality (25%), use of sponsor technologies (20%), design and polish (15%), and demo quality (10%).",
+    "Teams can have between 1 and 4 members. Solo submissions are allowed and welcome. There is no penalty for building solo, but team formation is encouraged early in the day.",
+    "Mentors from Vercel, Anthropic, Supabase, and Auth0 are roaming the venue wearing orange lanyards. Flag one down anytime for help with their technology. There is also a #help channel in the event Discord.",
+    "The venue is the Vercel NYC office. Restrooms are down the hall to the left of the main entrance. The quiet room for focused work is on the second floor. Please keep the main hall energetic but respectful.",
+    "Anthropic Claude models are available through the Vercel AI Gateway. Use claude-haiku-4-5 for fast, cheap calls and claude-sonnet-4-6 for higher-quality reasoning and scoring. Check the AI Gateway dashboard for exact model ids and your rate limits.",
+    "Vercel eve is the agent framework featured at this event. Initialize it with `npx eve@latest init`. Vercel Workflows provide durable execution with the `use workflow` and `use step` directives for long-running agent orchestration.",
+    "Supabase provides Postgres, the pgvector extension for semantic search with HNSW indexes, Realtime Broadcast and Presence channels, Auth, and Storage. It is free to start and ideal for hackathon speed.",
+    "Resend is the email API for the event. Use it with React Email templates to send transactional email. For the hackathon you can use the onboarding@resend.dev sandbox sender, or verify your own domain for production deliverability.",
+    "Auth0 handles authentication. Use the @auth0/nextjs-auth0 v4 SDK. Routes mount automatically at /auth/*. Social login with Google and GitHub can be enabled in the Auth0 dashboard under Authentication → Social.",
+    "Sentry provides error monitoring and AI Agent Monitoring. Install it with `npx @sentry/wizard@latest -i nextjs`, which instruments the client, server, and edge runtimes. AI Agent Monitoring traces AI SDK model and tool calls.",
+    "Parking: there is no dedicated event parking. Nearest paid garage is on the corner, two blocks east. Public transit is recommended — the venue is a 5-minute walk from the subway.",
+    "Code of conduct: be respectful, inclusive, and collaborative. Harassment of any kind results in removal from the event. Report issues to any organizer wearing a black BuildNYC staff shirt.",
+    "After the hackathon there is a networking happy hour from 5:00 PM to 6:30 PM with drinks and food. Winners are announced at 5:15 PM. Stick around — the after-party is where the best connections happen.",
+    "You retain full ownership of your intellectual property. Vercel and sponsors get no rights to your project beyond permission to feature winning demos on social media and event recaps."
+  ]
+}
