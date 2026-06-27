@@ -15,11 +15,30 @@ export async function getSession(): Promise<SessionData | null> {
 }
 
 /**
- * Resolve the signed-in user's profile row (by auth0_id) from Supabase.
+ * Lightweight identity for the signed-in user (no DB lookup).
+ * Returns null when Auth0 is unconfigured (mock) or there's no session.
+ */
+export async function getSessionUser(): Promise<{
+  auth0Id: string;
+  email: string;
+  name: string;
+} | null> {
+  const session = await getSession();
+  const user = session?.user;
+  if (!user?.sub) return null;
+  return {
+    auth0Id: user.sub,
+    email: (user.email as string) ?? `${user.sub}@demo.dev`,
+    name: (user.name as string) ?? (user.nickname as string) ?? 'Guest',
+  };
+}
+
+/**
+ * Resolve the signed-in user's profile row for a specific event.
  * Returns null when there's no session, no Supabase (MOCK_MODE), or no row yet.
  * Never throws — safe to call anywhere on the server.
  */
-export async function getCurrentProfile(): Promise<Profile | null> {
+export async function getCurrentProfile(eventId: string): Promise<Profile | null> {
   if (MOCK_MODE) return null;
 
   const session = await getSession();
@@ -33,6 +52,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     .from('profiles')
     .select('*')
     .eq('auth0_id', sub)
+    .eq('event_id', eventId)
     .maybeSingle();
 
   if (error || !data) return null;

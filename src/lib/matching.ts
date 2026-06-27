@@ -23,19 +23,22 @@ const matchScoreSchema = z.object({
 
 // ─────────────────────────── public API
 
-export async function runMatchesForProfile(profileId: string): Promise<Conversation[]> {
+export async function runMatchesForProfile(
+  profileId: string,
+  eventId: string,
+): Promise<Conversation[]> {
   const admin = supabaseAdmin();
 
   // ── MOCK mode: no DB. Rank seed profiles, fabricate conversations, don't write.
   if (!admin) {
-    return mockMatches(profileId);
+    return mockMatches(profileId, eventId);
   }
 
   const profile = await loadProfile(profileId);
   if (!profile) return [];
 
-  // 1) candidates via pgvector
-  const candidates = await findCandidates(profile);
+  // 1) candidates via pgvector (scoped to this event)
+  const candidates = await findCandidates(profile, eventId);
 
   // 2) score each candidate pair
   const scored = await Promise.all(
@@ -50,7 +53,7 @@ export async function runMatchesForProfile(profileId: string): Promise<Conversat
   // 4) upsert conversation rows (dedupe by pair)
   const conversations: Conversation[] = [];
   for (const { candidate, score } of top) {
-    const conv = await ensureConversation(profile.id, candidate.id, score);
+    const conv = await ensureConversation(profile.id, candidate.id, score, eventId);
     if (conv) conversations.push(conv);
   }
 
@@ -93,15 +96,16 @@ export async function scoreMatch(a: Profile, b: Profile): Promise<MatchScore> {
 
 // ─────────────────────────── candidate selection
 
-async function findCandidates(profile: Profile): Promise<Profile[]> {
+async function findCandidates(profile: Profile, eventId: string): Promise<Profile[]> {
   const admin = supabaseAdmin();
   if (!admin) return [];
 
-  // Embed the profile's searchable text, then call the pgvector RPC.
+  // Embed the profile's searchable text, then call the pgvector RPC (event-scoped).
   const queryEmbedding = await embedText(profileSearchText(profile));
   const { data, error } = await admin.rpc('match_profiles', {
     query_embedding: toVectorLiteral(queryEmbedding),
     exclude_id: profile.id,
+    p_event_id: eventId,
     match_count: TUNING.topCandidates,
   });
 
@@ -125,6 +129,7 @@ interface MatchProfileRow {
 function rowToProfile(r: MatchProfileRow): Profile {
   return {
     id: r.id,
+    event_id: null,
     auth0_id: '',
     name: r.name,
     email: '',
@@ -133,6 +138,10 @@ function rowToProfile(r: MatchProfileRow): Profile {
     looking_for: r.looking_for,
     bio: r.bio,
     agent_instructions: r.agent_instructions,
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     avatar_url: null,
     created_at: '',
   };
@@ -145,6 +154,7 @@ async function ensureConversation(
   profileA: string,
   profileB: string,
   score: MatchScore,
+  eventId: string,
 ): Promise<Conversation | null> {
   const admin = supabaseAdmin();
   if (!admin) return null;
@@ -164,6 +174,7 @@ async function ensureConversation(
   const { data, error } = await admin
     .from('conversations')
     .insert({
+      event_id: eventId,
       profile_a: profileA,
       profile_b: profileB,
       match_score: score.match_score,
@@ -179,7 +190,7 @@ async function ensureConversation(
 
 // ─────────────────────────── MOCK mode
 
-function mockMatches(profileId: string): Conversation[] {
+function mockMatches(profileId: string, eventId: string): Conversation[] {
   const self = seedProfileById(profileId) ?? SEED_PROFILES[0];
 
   const ranked = SEED_PROFILES.filter((p) => p.id !== self.id)
@@ -189,6 +200,7 @@ function mockMatches(profileId: string): Conversation[] {
 
   return ranked.map(({ candidate, score }, i) => ({
     id: `mock-conv-${self.id}-${candidate.id}-${i}`,
+    event_id: eventId,
     profile_a: self.id,
     profile_b: candidate.id,
     match_score: score.match_score,

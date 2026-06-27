@@ -13,8 +13,9 @@ import knowledge from '../../db/knowledge.json';
 import { embedText, embedTexts, toVectorLiteral } from './ai';
 import { TUNING } from './constants';
 import { flags } from './env';
-import { sendOrganizerEscalation } from '@/lib/email'; // Agent E — resolves at integration
+import { sendOrganizerEscalation } from '@/lib/email';
 import { supabaseAdmin } from './supabase';
+import { getEventById } from './events';
 
 export interface RetrievedChunk {
   content: string;
@@ -31,7 +32,10 @@ const KB_CHUNKS: string[] = knowledge.chunks;
  * Retrieve the top `ragTopChunks` knowledge chunks for a question.
  * LIVE: pgvector cosine via `match_knowledge`. MOCK: keyword-overlap ranking.
  */
-export async function retrieveChunks(question: string): Promise<RetrievedChunk[]> {
+export async function retrieveChunks(
+  question: string,
+  eventId: string,
+): Promise<RetrievedChunk[]> {
   const admin = supabaseAdmin();
 
   // MOCK: no DB or no embeddings → keyword-overlap rank over the bundled corpus.
@@ -43,6 +47,7 @@ export async function retrieveChunks(question: string): Promise<RetrievedChunk[]
     const queryEmbedding = await embedText(question);
     const { data, error } = await admin.rpc('match_knowledge', {
       query_embedding: toVectorLiteral(queryEmbedding),
+      p_event_id: eventId,
       match_count: TUNING.ragTopChunks,
     });
     if (error || !data) return keywordRank(question);
@@ -108,23 +113,74 @@ function round3(n: number): number {
  * Clears existing rows from the same source first so re-seeding is idempotent.
  * MOCK (no admin client): no-op, returns { inserted: 0 }.
  */
-export async function seedKnowledge(): Promise<{ inserted: number }> {
+export async function seedKnowledge(
+  eventId: string,
+  source: string = KB_SOURCE,
+): Promise<{ inserted: number }> {
   const admin = supabaseAdmin();
   if (!admin) return { inserted: 0 };
 
-  // Clear prior rows from this source so re-seeding doesn't duplicate.
-  await admin.from('knowledge_base').delete().eq('source', KB_SOURCE);
+  // Clear prior rows from this source+event so re-seeding doesn't duplicate.
+  await admin.from('knowledge_base').delete().eq('source', source).eq('event_id', eventId);
 
   const embeddings = await embedTexts(KB_CHUNKS);
   const rows = KB_CHUNKS.map((content, i) => ({
+    event_id: eventId,
     content,
-    source: KB_SOURCE,
+    source,
     embedding: toVectorLiteral(embeddings[i]),
   }));
 
   const { data, error } = await admin.from('knowledge_base').insert(rows).select('id');
   if (error) throw error;
   return { inserted: data?.length ?? 0 };
+}
+
+/**
+ * Chunk raw text (~`maxChars`-sized segments on paragraph boundaries), embed each,
+ * and insert into the event's knowledge base. Used by the admin "paste content" flow.
+ */
+export async function addKnowledge(
+  eventId: string,
+  rawText: string,
+  source: string,
+): Promise<{ inserted: number }> {
+  const admin = supabaseAdmin();
+  if (!admin) return { inserted: 0 };
+
+  const chunks = chunkText(rawText);
+  if (chunks.length === 0) return { inserted: 0 };
+
+  const embeddings = await embedTexts(chunks);
+  const rows = chunks.map((content, i) => ({
+    event_id: eventId,
+    content,
+    source,
+    embedding: toVectorLiteral(embeddings[i]),
+  }));
+  const { data, error } = await admin.from('knowledge_base').insert(rows).select('id');
+  if (error) throw error;
+  return { inserted: data?.length ?? 0 };
+}
+
+/** Split text into ~`maxChars`-sized chunks, breaking on blank lines / sentences. */
+function chunkText(text: string, maxChars = 1200): string[] {
+  const paras = text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  let buf = '';
+  for (const p of paras) {
+    if ((buf + '\n\n' + p).length > maxChars && buf) {
+      out.push(buf.trim());
+      buf = p;
+    } else {
+      buf = buf ? `${buf}\n\n${p}` : p;
+    }
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
 }
 
 // ─────────────────────────────────────────── escalation
@@ -137,9 +193,11 @@ export async function seedKnowledge(): Promise<{ inserted: number }> {
  */
 export async function escalate({
   question,
+  eventId,
   profileId,
 }: {
   question: string;
+  eventId: string;
   profileId?: string;
 }): Promise<{ escalationId: string }> {
   const admin = supabaseAdmin();
@@ -151,6 +209,7 @@ export async function escalate({
     const { data, error } = await admin
       .from('escalations')
       .insert({
+        event_id: eventId,
         question,
         asker_profile: profileId ?? null,
         status: 'open',
@@ -164,9 +223,15 @@ export async function escalate({
     }
   }
 
-  // Notify the organizer. Failures here must not break the concierge response.
+  // Notify the event's organizer. Failures here must not break the concierge response.
   try {
-    await sendOrganizerEscalation({ question, escalationId });
+    const event = await getEventById(eventId);
+    await sendOrganizerEscalation({
+      question,
+      escalationId,
+      to: event?.organizer_email,
+      eventName: event?.name,
+    });
   } catch (err) {
     console.error('[concierge] sendOrganizerEscalation failed:', err);
   }

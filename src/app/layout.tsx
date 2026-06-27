@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Auth0Provider } from "@auth0/nextjs-auth0";
 import "./globals.css";
-import { EVENT } from "@/lib/constants";
+import { BRAND } from "@/lib/constants";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BuildNYC Agents",
-  description: EVENT.tagline,
+  title: "Orbit — AI agents that network the room",
+  description: BRAND.tagline,
 };
 
 export default function RootLayout({

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabase';
 import { seedProfileById } from '@/lib/mock-data';
 import { sendMatchIntro } from '@/lib/email';
+import { getEventBySlug } from '@/lib/events';
+import { generateMatchCode } from '@/lib/match-code';
 import type { Profile } from '@/lib/types';
 
 export const maxDuration = 30;
@@ -10,17 +12,14 @@ export const maxDuration = 30;
 const BodySchema = z.object({
   fromProfileId: z.string().min(1),
   toProfileId: z.string().min(1),
+  eventSlug: z.string().optional(),
 });
 
 /**
  * POST /api/smash — record a "like" from one attendee to another.
- * Body: { fromProfileId, toProfileId }.
- *
- * If the target has already liked the sender, it's a mutual match: both rows are
- * marked mutual, both profiles are loaded, and intro emails fire to each.
- *
- * MOCK mode (no Supabase): treat the like as mutual when the target is a seed
- * profile so the demo "smash" always lights up. Logs the would-be email.
+ * On a mutual match, generate a shared match code, mark both rows mutual, store
+ * the code, and email both people (each with the other's details + the code).
+ * MOCK: a seed target always matches so the demo lights up.
  */
 export async function POST(request: Request) {
   let raw: unknown;
@@ -37,52 +36,44 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-
-  const { fromProfileId, toProfileId } = parsed.data;
+  const { fromProfileId, toProfileId, eventSlug } = parsed.data;
 
   if (fromProfileId === toProfileId) {
-    return NextResponse.json(
-      { ok: false, error: 'Cannot smash yourself' },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: 'Cannot smash yourself' }, { status: 400 });
   }
 
+  const event = eventSlug ? await getEventBySlug(eventSlug) : null;
+  const eventName = event?.name ?? 'Orbit';
   const db = supabaseAdmin();
 
   // ── MOCK MODE ──────────────────────────────────────────────────────────────
   if (!db) {
     const target = seedProfileById(toProfileId);
-    const mutual = Boolean(target); // demo-friendly: a seed target always matches
+    const mutual = Boolean(target);
+    let matchCode: string | null = null;
     if (mutual && target) {
-      const me = seedProfileById(fromProfileId) ?? {
-        id: fromProfileId,
-        name: 'You',
-        email: 'you@buildnyc.dev',
-        role: null,
-        bio: null,
-        looking_for: null,
-      } as Profile;
-      // Log the would-be email (sendMatchIntro itself also logs in mock).
-      await sendMatchIntro(me, target);
+      matchCode = generateMatchCode();
+      const me =
+        seedProfileById(fromProfileId) ??
+        ({ id: fromProfileId, name: 'You', email: 'you@demo.dev', role: null, bio: null, looking_for: null } as Profile);
+      await sendMatchIntro(me, target, { matchCode, eventName });
     }
-    return NextResponse.json({ ok: true, mutual, mock: true });
+    return NextResponse.json({ ok: true, mutual, matchCode, mock: true });
   }
 
   // ── LIVE MODE ────────────────────────────────────────────────────────────────
   try {
-    // Record the like (idempotent on the unique (from, to) pair).
     const { error: upsertError } = await db
       .from('matches')
       .upsert(
-        { from_profile: fromProfileId, to_profile: toProfileId },
+        { from_profile: fromProfileId, to_profile: toProfileId, event_id: event?.id ?? null },
         { onConflict: 'from_profile,to_profile', ignoreDuplicates: true },
       );
     if (upsertError) throw upsertError;
 
-    // Does the reverse like already exist?
     const { data: reverse, error: reverseError } = await db
       .from('matches')
-      .select('id')
+      .select('id, match_code')
       .eq('from_profile', toProfileId)
       .eq('to_profile', fromProfileId)
       .maybeSingle();
@@ -92,16 +83,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, mutual: false });
     }
 
-    // Mutual! Mark both directions mutual.
+    // Mutual! Reuse an existing code if one was already assigned, else mint one.
+    const matchCode = (reverse.match_code as string | null) ?? generateMatchCode();
+    const pairFilter = `and(from_profile.eq.${fromProfileId},to_profile.eq.${toProfileId}),and(from_profile.eq.${toProfileId},to_profile.eq.${fromProfileId})`;
+
     const { error: mutualError } = await db
       .from('matches')
-      .update({ mutual: true })
-      .or(
-        `and(from_profile.eq.${fromProfileId},to_profile.eq.${toProfileId}),and(from_profile.eq.${toProfileId},to_profile.eq.${fromProfileId})`,
-      );
+      .update({ mutual: true, match_code: matchCode })
+      .or(pairFilter);
     if (mutualError) throw mutualError;
 
-    // Load both profiles and send intros.
     const { data: profiles, error: profilesError } = await db
       .from('profiles')
       .select('*')
@@ -112,18 +103,13 @@ export async function POST(request: Request) {
     const b = profiles?.find((p) => p.id === toProfileId) as Profile | undefined;
 
     if (a && b) {
-      const result = await sendMatchIntro(a, b);
+      const result = await sendMatchIntro(a, b, { matchCode, eventName });
       if (result.ok) {
-        await db
-          .from('matches')
-          .update({ email_sent: true })
-          .or(
-            `and(from_profile.eq.${fromProfileId},to_profile.eq.${toProfileId}),and(from_profile.eq.${toProfileId},to_profile.eq.${fromProfileId})`,
-          );
+        await db.from('matches').update({ email_sent: true }).or(pairFilter);
       }
     }
 
-    return NextResponse.json({ ok: true, mutual: true });
+    return NextResponse.json({ ok: true, mutual: true, matchCode });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Smash failed' },

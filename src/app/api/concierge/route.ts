@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { streamText } from 'ai';
 import { chatModel } from '@/lib/ai';
-import { TUNING, EVENT } from '@/lib/constants';
+import { TUNING, BRAND } from '@/lib/constants';
 import { flags } from '@/lib/env';
 import { retrieveChunks, topSimilarity, escalate } from '@/lib/concierge';
+import { getEventBySlug } from '@/lib/events';
 
 export const maxDuration = 60;
 
@@ -22,6 +23,7 @@ export const maxDuration = 60;
 
 const BodySchema = z.object({
   question: z.string().min(1).max(1000),
+  eventSlug: z.string().optional(),
   profileId: z.string().min(1).optional(),
 });
 
@@ -40,14 +42,18 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return jsonError('question is required', 400);
   }
-  const { question, profileId } = parsed.data;
+  const { question, profileId, eventSlug } = parsed.data;
 
-  const chunks = await retrieveChunks(question);
+  const event = eventSlug ? await getEventBySlug(eventSlug) : await getEventBySlug(BRAND.defaultEventSlug);
+  const eventId = event?.id ?? 'e0000000-0000-4000-a000-000000000001';
+  const eventName = event?.name ?? 'this event';
+
+  const chunks = await retrieveChunks(question, eventId);
   const top = topSimilarity(chunks);
 
   // ── Low confidence → escalate to organizer, stream a heads-up to the user.
   if (top < TUNING.ragMinSimilarity) {
-    await escalate({ question, profileId }).catch((err) => {
+    await escalate({ question, eventId, profileId }).catch((err) => {
       console.error('[concierge] escalate failed:', err);
     });
 
@@ -58,7 +64,7 @@ export async function POST(request: Request) {
     const result = streamText({
       model: chatModel('fast'),
       system:
-        "You are the BuildNYC event concierge. You don't know the answer to the user's " +
+        `You are the ${eventName} concierge. You don't know the answer to the user's ` +
         'question, so an organizer has already been notified by email. In one warm, brief ' +
         "sentence, tell the user you're not sure but you've notified the organizer and " +
         "they'll get an answer shortly. Do not invent any facts.",
@@ -83,7 +89,7 @@ export async function POST(request: Request) {
   const result = streamText({
     model: chatModel('smart'),
     system:
-      `You are the concierge for ${EVENT.name} (${EVENT.slug}), a one-day hackathon. ` +
+      `You are the concierge for ${eventName}. ` +
       'Answer the user\'s question using ONLY the context below. Be concise, friendly, ' +
       'and specific (include times, prices, passwords, etc. when present). If the context ' +
       'does not contain the answer, say you are not certain rather than guessing. ' +

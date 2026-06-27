@@ -12,16 +12,23 @@ export interface SmashButtonProps {
   currentProfileId: string | null;
   targetProfileId: string;
   targetName: string;
+  eventSlug?: string;
 }
 
 /**
- * Heart "smash" (like) button. POSTs to /api/smash; celebrates on a mutual match.
- * If there's no signed-in profile (mock/no-auth) it uses a placeholder id so the
- * demo still works and the celebration fires.
+ * Heart "smash" (like) button. POSTs to /api/smash; celebrates on a mutual match
+ * and shows the shared match code. With no signed-in profile (mock/no-auth) it
+ * uses a placeholder id so the demo still works.
  */
-export function SmashButton({ currentProfileId, targetProfileId, targetName }: SmashButtonProps) {
+export function SmashButton({
+  currentProfileId,
+  targetProfileId,
+  targetName,
+  eventSlug,
+}: SmashButtonProps) {
   const [state, setState] = React.useState<SmashState>('idle');
   const [showBanner, setShowBanner] = React.useState(false);
+  const [matchCode, setMatchCode] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const disabled = state === 'pending' || state === 'liked' || state === 'mutual';
@@ -37,9 +44,10 @@ export function SmashButton({ currentProfileId, targetProfileId, targetName }: S
       const res = await fetch('/api/smash', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fromProfileId, toProfileId: targetProfileId }),
+        body: JSON.stringify({ fromProfileId, toProfileId: targetProfileId, eventSlug }),
       });
-      const data: { ok: boolean; mutual?: boolean; error?: string } = await res.json();
+      const data: { ok: boolean; mutual?: boolean; matchCode?: string | null; error?: string } =
+        await res.json();
 
       if (!res.ok || !data.ok) {
         setError(data.error ?? 'Something went wrong');
@@ -49,6 +57,7 @@ export function SmashButton({ currentProfileId, targetProfileId, targetName }: S
 
       if (data.mutual) {
         setState('mutual');
+        setMatchCode(data.matchCode ?? null);
         setShowBanner(true);
       } else {
         setState('liked');
@@ -117,6 +126,11 @@ export function SmashButton({ currentProfileId, targetProfileId, targetName }: S
             role="status"
           >
             🎉 You matched with {targetName}! Check your email.
+            {matchCode ? (
+              <span className="mt-1 block font-mono text-sm font-bold tracking-wider text-success">
+                Code: {matchCode}
+              </span>
+            ) : null}
           </motion.div>
         ) : null}
       </AnimatePresence>

@@ -33,7 +33,10 @@ const GREETING: ChatMessage = {
 
 const SUGGESTIONS = ['What are the prizes?', 'When is lunch?', "What's the WiFi password?"];
 
-export default function ConciergePanel({ profileId }: { profileId?: string } = {}) {
+export default function ConciergePanel({
+  profileId,
+  eventSlug,
+}: { profileId?: string; eventSlug?: string } = {}) {
   const [messages, setMessages] = React.useState<ChatMessage[]>([GREETING]);
   const [input, setInput] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -61,7 +64,7 @@ export default function ConciergePanel({ profileId }: { profileId?: string } = {
       const res = await fetch('/api/concierge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q, profileId }),
+        body: JSON.stringify({ question: q, profileId, eventSlug }),
       });
 
       const escalated = res.headers.get('X-Concierge-Escalated') === 'true';

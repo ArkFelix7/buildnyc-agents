@@ -17,7 +17,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'A full-stack dev to ship a polished demo with',
     bio: 'Product designer, 5 yrs. I make hackathon projects look like real products.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:10:00Z',
   },
   {
@@ -30,7 +34,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'A designer — I can build anything but it looks like a spreadsheet',
     bio: 'Full-stack dev who loves Supabase + Vercel. Shipping is my love language.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:11:00Z',
   },
   {
@@ -43,7 +51,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'A frontend partner to wrap my agent backend in something demo-able',
     bio: 'AI engineer. I live in embeddings and agent loops. Weak on CSS.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:12:00Z',
   },
   {
@@ -56,7 +68,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'Engineers to turn my hackathon idea into a real demo',
     bio: 'PM with a killer idea for live event tooling. Need builders.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:13:00Z',
   },
   {
@@ -69,7 +85,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'An AI engineer with a backend that needs a beautiful realtime UI',
     bio: 'Frontend dev obsessed with buttery realtime interfaces.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:14:00Z',
   },
   {
@@ -82,7 +102,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'A designer + PM to shape an agent product',
     bio: 'I build durable agent workflows. Looking for product + design minds.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:15:00Z',
   },
   {
@@ -95,7 +119,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'A team that needs visual identity + motion for the pitch',
     bio: 'Brand & motion designer. I make demos unforgettable.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:16:00Z',
   },
   {
@@ -108,7 +136,11 @@ export const SEED_PROFILES: Profile[] = [
     looking_for: 'Frontend + AI folks; I handle infra and data',
     bio: 'Backend/infra dev. I keep the lights on so you can demo.',
     agent_instructions: null,
-    avatar_url: null,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
+    avatar_style: null,
+    avatar_seed: null,
+    wants_matching: true,
+    open_to_connect: true,
     created_at: '2026-06-27T12:17:00Z',
   },
 ];
@@ -127,6 +159,7 @@ function mkConversation(
 ): Conversation {
   return {
     id,
+    event_id: 'e0000000-0000-4000-a000-000000000001',
     profile_a: aId,
     profile_b: bId,
     match_score: score,
@@ -220,8 +253,8 @@ export function seedConversationCards(): ConversationCard[] {
     const b = seedProfileById(conversation.profile_b)!;
     return {
       conversation,
-      a: { id: a.id, name: a.name, role: a.role, avatar_url: a.avatar_url },
-      b: { id: b.id, name: b.name, role: b.role, avatar_url: b.avatar_url },
+      a: { id: a.id, name: a.name, role: a.role, avatar_style: a.avatar_style, avatar_seed: a.avatar_seed },
+      b: { id: b.id, name: b.name, role: b.role, avatar_style: b.avatar_style, avatar_seed: b.avatar_seed },
       messages: seedMessagesFor(conversation.id),
     };
   });

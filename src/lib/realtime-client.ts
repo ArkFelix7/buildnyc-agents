@@ -52,8 +52,8 @@ function appendMessage(cards: ConversationCard[], msg: Message): ConversationCar
 function emptyCardFromConversation(conv: Conversation): ConversationCard {
   return {
     conversation: conv,
-    a: { id: conv.profile_a, name: 'Builder', role: null, avatar_url: null },
-    b: { id: conv.profile_b, name: 'Builder', role: null, avatar_url: null },
+    a: { id: conv.profile_a, name: 'Builder', role: null, avatar_style: null, avatar_seed: null },
+    b: { id: conv.profile_b, name: 'Builder', role: null, avatar_style: null, avatar_seed: null },
     messages: [],
   };
 }
@@ -70,7 +70,10 @@ function emptyCardFromConversation(conv: Conversation): ConversationCard {
  *
  * Returns the current cards plus the online (presence) count.
  */
-export function useLiveConversations(initialCards: ConversationCard[]): {
+export function useLiveConversations(
+  initialCards: ConversationCard[],
+  eventId?: string | null,
+): {
   cards: ConversationCard[];
   online: number;
 } {
@@ -143,6 +146,8 @@ export function useLiveConversations(initialCards: ConversationCard[]): {
         { event: 'INSERT', schema: 'public', table: 'conversations' },
         (payload) => {
           const conv = payload.new as Conversation;
+          // Only surface conversations belonging to this event's room.
+          if (eventId && conv.event_id && conv.event_id !== eventId) return;
           setCards((prev) => {
             if (prev.some((c) => c.conversation.id === conv.id)) return prev;
             return [emptyCardFromConversation(conv), ...prev].slice(
@@ -171,7 +176,7 @@ export function useLiveConversations(initialCards: ConversationCard[]): {
     return () => {
       void client.removeChannel(channel);
     };
-  }, [client]);
+  }, [client, eventId]);
 
   // ── LIVE presence (online count) ──────────────────────────────────────
   React.useEffect(() => {

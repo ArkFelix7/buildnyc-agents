@@ -1,5 +1,13 @@
-/** Hackathon-specific configuration. v1 is hardcoded to buildnyc26 (see PRD §4). */
+/** Platform brand. Orbit — AI agents that network the room for you. */
+export const BRAND = {
+  name: 'Orbit',
+  tagline: 'Your agent works the room. The right people find you.',
+  subtitle:
+    'Spin up an AI agent for any event. It meets dozens of people at once, finds your perfect collaborators in real time, and introduces you the moment it’s mutual.',
+  defaultEventSlug: 'buildnyc26',
+} as const;
 
+/** Legacy single-event config — retained for the seed event + back-compat. */
 export const EVENT = {
   slug: 'buildnyc26',
   name: 'Built in NYC',

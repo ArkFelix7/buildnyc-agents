@@ -1,4 +1,4 @@
-/** Domain types — mirror db/schema.sql. Shared by every feature slice. */
+/** Domain types — mirror db/schema.sql + db/schema_v2.sql. Shared by every slice. */
 
 export type Role = 'dev' | 'designer' | 'ai_engineer' | 'pm' | 'other';
 
@@ -10,8 +10,26 @@ export const ROLE_LABELS: Record<Role, string> = {
   other: 'Other',
 };
 
+/** An event — the top-level tenant. Slug-routed at /{slug}. */
+export interface Event {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string | null;
+  description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  organizer_auth0_id: string;
+  organizer_email: string;
+  admin_passcode: string | null;
+  theme_color: string | null;
+  matching_enabled: boolean;
+  created_at: string;
+}
+
 export interface Profile {
   id: string;
+  event_id: string | null;
   auth0_id: string;
   name: string;
   email: string;
@@ -20,12 +38,17 @@ export interface Profile {
   looking_for: string | null;
   bio: string | null;
   agent_instructions: string | null;
-  avatar_url?: string | null;
+  avatar_style: string | null; // see AVATAR_STYLES
+  avatar_seed: string | null; // deterministic render seed
+  wants_matching: boolean;
+  open_to_connect: boolean;
+  avatar_url?: string | null; // legacy; unused (generated avatars now)
   created_at: string;
 }
 
 export interface Conversation {
   id: string;
+  event_id: string | null;
   profile_a: string;
   profile_b: string;
   match_score: number | null;
@@ -34,6 +57,12 @@ export interface Conversation {
   status: 'active' | 'completed';
   created_at: string;
 }
+
+/** Minimal participant shape for cards/presence (includes generated-avatar fields). */
+export type ProfileBrief = Pick<
+  Profile,
+  'id' | 'name' | 'role' | 'avatar_style' | 'avatar_seed'
+>;
 
 export interface Message {
   id: string;
@@ -46,9 +75,11 @@ export interface Message {
 
 export interface Match {
   id: string;
+  event_id: string | null;
   from_profile: string;
   to_profile: string;
   mutual: boolean;
+  match_code: string | null; // shared 'AMBER-FALCON' on mutual match
   email_sent: boolean;
   created_at: string;
 }
@@ -69,8 +100,8 @@ export interface MatchScore {
 /** A conversation card as rendered on Mission Control (joined view). */
 export interface ConversationCard {
   conversation: Conversation;
-  a: Pick<Profile, 'id' | 'name' | 'role' | 'avatar_url'>;
-  b: Pick<Profile, 'id' | 'name' | 'role' | 'avatar_url'>;
+  a: ProfileBrief;
+  b: ProfileBrief;
   messages: Message[];
 }
 

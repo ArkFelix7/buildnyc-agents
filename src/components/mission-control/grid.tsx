@@ -3,23 +3,31 @@
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
-import { EVENT } from '@/lib/constants';
+import Link from 'next/link';
 import { useLiveConversations } from '@/lib/realtime-client';
 import { Button } from '@/components/ui';
 import { ConversationCard } from '@/components/mission-control/conversation-card';
 import { StatsBanner } from '@/components/mission-control/stats-banner';
 import { PresenceBar } from '@/components/mission-control/presence-bar';
-import ConciergePanel from '@/components/concierge/panel'; // Agent D — resolves at integration
-import type { ConversationCard as Card } from '@/lib/types';
+import ConciergePanel from '@/components/concierge/panel';
+import type { ConversationCard as Card, Event } from '@/lib/types';
 
 export interface MissionControlGridProps {
+  event: Event;
   initialCards: Card[];
   currentProfileId: string | null;
+  /** True when the viewer hasn't created a profile for this event yet. */
+  showJoinCta?: boolean;
 }
 
-/** Top-level client surface for Mission Control. */
-export function MissionControlGrid({ initialCards, currentProfileId }: MissionControlGridProps) {
-  const { cards, online } = useLiveConversations(initialCards);
+/** Top-level client surface for an event's Mission Control. */
+export function MissionControlGrid({
+  event,
+  initialCards,
+  currentProfileId,
+  showJoinCta,
+}: MissionControlGridProps) {
+  const { cards, online } = useLiveConversations(initialCards, event.id);
   const [conciergeOpen, setConciergeOpen] = React.useState(false);
 
   const activeCount = cards.filter((c) => c.conversation.status === 'active').length;
@@ -49,11 +57,20 @@ export function MissionControlGrid({ initialCards, currentProfileId }: MissionCo
               LIVE
             </span>
             <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-              {EVENT.name}
+              {event.name}
               <span className="ml-2 text-brand">Mission Control</span>
             </h1>
           </div>
-          <PresenceBar count={online} names={names} />
+          <div className="flex items-center gap-3">
+            {showJoinCta && event.matching_enabled ? (
+              <Link href={`/${event.slug}/join`}>
+                <Button variant="outline" className="text-sm">
+                  Join the matching
+                </Button>
+              </Link>
+            ) : null}
+            <PresenceBar count={online} names={names} />
+          </div>
         </header>
 
         {/* Stats */}
@@ -79,6 +96,7 @@ export function MissionControlGrid({ initialCards, currentProfileId }: MissionCo
                     key={card.conversation.id}
                     card={card}
                     currentProfileId={currentProfileId}
+                    eventSlug={event.slug}
                   />
                 ))}
               </AnimatePresence>
@@ -130,7 +148,7 @@ export function MissionControlGrid({ initialCards, currentProfileId }: MissionCo
                 </button>
               </div>
               <div className="max-h-[calc(80vh-3.5rem)] overflow-y-auto">
-                <ConciergePanel />
+                <ConciergePanel eventSlug={event.slug} profileId={currentProfileId ?? undefined} />
               </div>
             </motion.div>
           </>

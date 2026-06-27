@@ -4,6 +4,8 @@ import { embedText, toVectorLiteral } from '@/lib/ai';
 import { generatePersona } from '@/lib/persona';
 import { runMatchesForProfile } from '@/lib/matching';
 import { SEED_PROFILES } from '@/lib/mock-data';
+import { getEventBySlug } from '@/lib/events';
+import { BRAND } from '@/lib/constants';
 import type { Profile } from '@/lib/types';
 
 // Embedding 8 profiles + persona generation + match pre-warm can take a while
@@ -35,6 +37,9 @@ export async function POST() {
     return NextResponse.json({ ok: true, mock: true, seeded: 0, prewarmed: 0 });
   }
 
+  const event = await getEventBySlug(BRAND.defaultEventSlug);
+  const eventId = event?.id ?? 'e0000000-0000-4000-a000-000000000001';
+
   let seeded = 0;
   const errors: { profile: string; error: string }[] = [];
 
@@ -45,6 +50,7 @@ export async function POST() {
         .from('profiles')
         .upsert(
           {
+            event_id: eventId,
             auth0_id: profile.auth0_id,
             name: profile.name,
             email: profile.email,
@@ -52,10 +58,9 @@ export async function POST() {
             skills: profile.skills,
             looking_for: profile.looking_for,
             bio: profile.bio,
-            avatar_url: profile.avatar_url ?? null,
             embedding: toVectorLiteral(vec),
           },
-          { onConflict: 'auth0_id' },
+          { onConflict: 'event_id,auth0_id' },
         );
       if (error) throw new Error(error.message);
 
@@ -82,7 +87,7 @@ export async function POST() {
       .in('auth0_id', warmFor);
     for (const row of rows ?? []) {
       try {
-        const convos = await runMatchesForProfile(row.id as string);
+        const convos = await runMatchesForProfile(row.id as string, eventId);
         prewarmed += convos.length;
       } catch {
         // ignore per-profile match failures

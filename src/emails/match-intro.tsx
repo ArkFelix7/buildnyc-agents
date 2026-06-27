@@ -17,6 +17,8 @@ export interface MatchIntroEmailProps {
   matchRole: Role | null;
   matchBio: string | null;
   matchLookingFor: string | null;
+  matchCode?: string | null;
+  eventName?: string;
 }
 
 const styles = {
@@ -90,6 +92,30 @@ const styles = {
     fontWeight: 700,
     margin: '4px 0 16px',
   } as React.CSSProperties,
+  codeBox: {
+    backgroundColor: '#0f1f1a',
+    border: '1px solid #22d39a',
+    borderRadius: '12px',
+    padding: '16px 20px',
+    margin: '4px 0 18px',
+    textAlign: 'center' as const,
+  } as React.CSSProperties,
+  codeLabel: {
+    color: '#7fe6c4',
+    fontSize: '12px',
+    fontWeight: 600,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+    margin: '0 0 6px',
+  } as React.CSSProperties,
+  code: {
+    color: '#22d39a',
+    fontSize: '26px',
+    fontWeight: 800,
+    letterSpacing: '0.06em',
+    fontFamily: "'SF Mono', ui-monospace, Menlo, monospace",
+    margin: 0,
+  } as React.CSSProperties,
   hr: {
     borderColor: '#26263a',
     margin: '20px 0 16px',
@@ -107,6 +133,8 @@ export function MatchIntroEmail({
   matchRole,
   matchBio,
   matchLookingFor,
+  matchCode,
+  eventName = 'Orbit',
 }: MatchIntroEmailProps) {
   const roleLabel = matchRole ? ROLE_LABELS[matchRole] : null;
   return (
@@ -118,7 +146,7 @@ export function MatchIntroEmail({
 
           <Text style={styles.text}>Hi {recipientName},</Text>
           <Text style={styles.text}>
-            Great news — you and {matchName} both liked each other at BuildNYC Agents.
+            Great news — you and {matchName} both liked each other at {eventName}.
             Here&apos;s who you matched with:
           </Text>
 
@@ -143,12 +171,21 @@ export function MatchIntroEmail({
 
           <Text style={styles.callout}>You both liked each other. Go find them!</Text>
 
+          {matchCode ? (
+            <Section style={styles.codeBox}>
+              <Text style={styles.codeLabel}>Your shared match code</Text>
+              <Text style={styles.code}>{matchCode}</Text>
+            </Section>
+          ) : null}
+
           <Text style={styles.text}>
-            Just reply to this email to connect — we&apos;ll make sure it reaches {matchName}.
+            {matchCode
+              ? `Find ${matchName} at the event and say your code to confirm it's really you two.`
+              : `Just reply to this email to connect — we'll make sure it reaches ${matchName}.`}
           </Text>
 
           <Hr style={styles.hr} />
-          <Text style={styles.footer}>— BuildNYC Agents</Text>
+          <Text style={styles.footer}>— {eventName} · powered by Orbit</Text>
         </Container>
       </Body>
     </Html>

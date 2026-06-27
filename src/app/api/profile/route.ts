@@ -1,20 +1,26 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth0 } from '@/lib/auth0';
-import { flags, MOCK_MODE } from '@/lib/env';
+import { flags } from '@/lib/env';
 import { supabaseAdmin } from '@/lib/supabase';
 import { embedText, toVectorLiteral } from '@/lib/ai';
+import { getEventBySlug } from '@/lib/events';
 import type { Profile, Role } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
-// Agent B modules — may not exist while this is built; they resolve at integration.
 import { generatePersona } from '@/lib/persona';
 import { runMatchesForProfile } from '@/lib/matching';
+
+export const maxDuration = 60;
 
 const ROLES = Object.keys(ROLE_LABELS) as [Role, ...Role[]];
 
 const BodySchema = z.object({
+  eventSlug: z.string().min(1),
   name: z.string().min(1).max(80),
   email: z.string().email().optional(),
+  avatar_style: z.string().max(40).optional(),
+  avatar_seed: z.string().max(40).optional(),
+  wants_matching: z.boolean().default(true),
   role: z.enum(ROLES).nullable().optional(),
   skills: z.array(z.string().min(1).max(40)).max(20).default([]),
   looking_for: z.string().max(200).optional().default(''),
@@ -22,9 +28,9 @@ const BodySchema = z.object({
 });
 
 /**
- * POST /api/profile — create or update the signed-in user's profile, embed it,
- * generate an agent persona, and kick off matching. Degrades gracefully to a
- * fabricated mock profile when Supabase/Auth0 are unconfigured.
+ * POST /api/profile — create/update the signed-in user's profile FOR AN EVENT.
+ * Embeds + generates an agent persona + kicks off matching only when the user
+ * opted into matching. Degrades to a fabricated mock profile with no DB.
  */
 export async function POST(request: Request) {
   let raw: unknown;
@@ -41,9 +47,15 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { name, role, skills, looking_for, bio } = parsed.data;
+  const b = parsed.data;
 
-  // (a) Resolve identity from session, or fabricate in mock mode.
+  const event = await getEventBySlug(b.eventSlug);
+  if (!event) {
+    return NextResponse.json({ ok: false, error: 'Event not found' }, { status: 404 });
+  }
+  const wantsMatching = b.wants_matching && event.matching_enabled;
+
+  // (a) Identity from session, or fabricate in mock mode.
   let auth0_id: string;
   let email: string;
   if (flags.hasAuth0) {
@@ -53,52 +65,64 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'Not authenticated' }, { status: 401 });
     }
     auth0_id = user.sub;
-    email = parsed.data.email ?? user.email ?? `${user.sub}@demo.dev`;
+    email = b.email ?? user.email ?? `${user.sub}@demo.dev`;
   } else {
-    auth0_id = `mock|${name}`;
-    email = parsed.data.email ?? `${name.replace(/\s+/g, '.').toLowerCase()}@demo.dev`;
+    auth0_id = `mock|${b.name}`;
+    email = b.email ?? `${b.name.replace(/\s+/g, '.').toLowerCase()}@demo.dev`;
   }
-
-  // (b) Build embedding input + vector.
-  const roleLabel = role ? ROLE_LABELS[role] : 'other';
-  const input = `${roleLabel} | skills: ${skills.join(', ')} | looking for: ${looking_for} | ${bio}`;
-  const vec = await embedText(input);
 
   const db = supabaseAdmin();
 
-  // (c) MOCK fallback — fabricate a Profile so the UI flow works with no DB.
-  if (!db || MOCK_MODE) {
+  // (b) MOCK fallback — fabricate a Profile so the UI flow works with no DB.
+  if (!db) {
     const profile: Profile = {
       id: crypto.randomUUID(),
+      event_id: event.id,
       auth0_id,
-      name,
+      name: b.name,
       email,
-      role: role ?? null,
-      skills,
-      looking_for: looking_for || null,
-      bio: bio || null,
+      role: b.role ?? null,
+      skills: b.skills,
+      looking_for: b.looking_for || null,
+      bio: b.bio || null,
       agent_instructions: null,
+      avatar_style: b.avatar_style ?? null,
+      avatar_seed: b.avatar_seed ?? null,
+      wants_matching: wantsMatching,
+      open_to_connect: true,
       avatar_url: null,
       created_at: new Date().toISOString(),
     };
     return NextResponse.json({ ok: true, mock: true, profile });
   }
 
-  // (d) Upsert the profile (conflict on auth0_id) and read back the row.
+  // (c) Embedding only when the user wants matching.
+  let embedding: string | null = null;
+  if (wantsMatching) {
+    const roleLabel = b.role ? ROLE_LABELS[b.role] : 'other';
+    const input = `${roleLabel} | skills: ${b.skills.join(', ')} | looking for: ${b.looking_for} | ${b.bio}`;
+    embedding = toVectorLiteral(await embedText(input));
+  }
+
+  // (d) Upsert (conflict on event_id + auth0_id).
   const { data, error } = await db
     .from('profiles')
     .upsert(
       {
+        event_id: event.id,
         auth0_id,
-        name,
+        name: b.name,
         email,
-        role,
-        skills,
-        looking_for: looking_for || null,
-        bio: bio || null,
-        embedding: toVectorLiteral(vec),
+        role: b.role ?? null,
+        skills: b.skills,
+        looking_for: b.looking_for || null,
+        bio: b.bio || null,
+        avatar_style: b.avatar_style ?? null,
+        avatar_seed: b.avatar_seed ?? null,
+        wants_matching: wantsMatching,
+        embedding,
       },
-      { onConflict: 'auth0_id' },
+      { onConflict: 'event_id,auth0_id' },
     )
     .select('*')
     .single();
@@ -111,14 +135,15 @@ export async function POST(request: Request) {
   }
   const profile = data as Profile;
 
-  // (e) Persona generation + matching. Failures here must not lose the saved profile.
-  try {
-    await generatePersona(profile);
-    await runMatchesForProfile(profile.id);
-  } catch (err) {
-    console.error('[api/profile] persona/match failed (profile still saved):', err);
+  // (e) Persona + matching only when opted in. Failures must not lose the profile.
+  if (wantsMatching) {
+    try {
+      await generatePersona(profile);
+      await runMatchesForProfile(profile.id, event.id);
+    } catch (err) {
+      console.error('[api/profile] persona/match failed (profile still saved):', err);
+    }
   }
 
-  // (f)
   return NextResponse.json({ ok: true, profile });
 }

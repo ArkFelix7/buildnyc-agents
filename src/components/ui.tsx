@@ -1,20 +1,34 @@
 import * as React from 'react';
 import { cn, initials } from '@/lib/utils';
 import { ROLE_LABELS, type Role } from '@/lib/types';
+import { GenAvatar } from '@/lib/avatar';
 
 /** Shared UI primitives. Feature slices import these — do not fork them. */
 
 export function Avatar({
   name,
   src,
+  avatarStyle,
+  avatarSeed,
   size = 40,
   className,
 }: {
   name: string;
   src?: string | null;
+  /** Generated-avatar fields (preferred). Falls back to initials if absent. */
+  avatarStyle?: string | null;
+  avatarSeed?: string | null;
   size?: number;
   className?: string;
 }) {
+  // Generated avatar (the default for participants).
+  if (avatarStyle || avatarSeed) {
+    return (
+      <span className={cn('ring-1 ring-border rounded-full block shrink-0', className)} style={{ lineHeight: 0 }}>
+        <GenAvatar style={avatarStyle} seed={avatarSeed ?? name} size={size} title={name} />
+      </span>
+    );
+  }
   return (
     <div
       className={cn(

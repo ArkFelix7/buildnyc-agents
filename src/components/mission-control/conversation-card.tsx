@@ -11,6 +11,7 @@ export interface ConversationCardProps {
   card: Card;
   /** The signed-in user's profile id (null in mock / anonymous). */
   currentProfileId: string | null;
+  eventSlug: string;
 }
 
 function Bubble({
@@ -56,7 +57,7 @@ function Bubble({
 }
 
 /** One live agent-to-agent conversation. */
-export function ConversationCard({ card, currentProfileId }: ConversationCardProps) {
+export function ConversationCard({ card, currentProfileId, eventSlug }: ConversationCardProps) {
   const { conversation, a, b, messages } = card;
   const feedRef = React.useRef<HTMLDivElement>(null);
 
@@ -84,8 +85,8 @@ export function ConversationCard({ card, currentProfileId }: ConversationCardPro
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex -space-x-1.5">
-            <Avatar name={a.name} src={a.avatar_url} size={36} className="ring-2 ring-surface" />
-            <Avatar name={b.name} src={b.avatar_url} size={36} className="ring-2 ring-surface" />
+            <Avatar name={a.name} avatarStyle={a.avatar_style} avatarSeed={a.avatar_seed} size={36} className="ring-2 ring-surface" />
+            <Avatar name={b.name} avatarStyle={b.avatar_style} avatarSeed={b.avatar_seed} size={36} className="ring-2 ring-surface" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
@@ -156,6 +157,7 @@ export function ConversationCard({ card, currentProfileId }: ConversationCardPro
           currentProfileId={currentProfileId}
           targetProfileId={target.id}
           targetName={target.name}
+          eventSlug={eventSlug}
         />
       </div>
     </motion.div>
